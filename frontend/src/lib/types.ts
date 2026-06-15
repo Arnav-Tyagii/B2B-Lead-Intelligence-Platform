@@ -5,7 +5,9 @@
 
 export type Tier = "Hot" | "Warm" | "Cold";
 export type EnrichmentSource = "gemini" | "fallback";
-export type SortOrder = "score_desc" | "score_asc" | "ai_first";
+/** Firmographic provenance: where the company data came from. */
+export type DataSource = "synthetic" | "sec_edgar";
+export type SortOrder = "score_desc" | "score_asc" | "ai_first" | "real_first";
 
 export interface Company {
   name: string;
@@ -18,6 +20,9 @@ export interface Company {
   founded_year: number | null;
   description: string;
   recent_news: string[];
+  data_source: DataSource;
+  /** Computed on the backend: true for real (non-synthetic) firmographics. */
+  is_real_data: boolean;
 }
 
 export interface Enrichment {
@@ -100,5 +105,6 @@ export interface AccountsParams {
   country?: string;
   min_score?: number;
   source?: EnrichmentSource;
+  data_source?: DataSource;
   sort?: SortOrder;
 }

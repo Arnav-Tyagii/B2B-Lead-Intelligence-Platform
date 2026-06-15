@@ -6,6 +6,7 @@ import { Divider } from "@/components/ui/Divider";
 import { ScoreBreakdown } from "@/components/account/ScoreBreakdown";
 import { OutreachBlock } from "@/components/account/OutreachBlock";
 import { SourceNotice } from "@/components/account/SourceNotice";
+import { CompanyLogo } from "@/components/ui/CompanyLogo";
 
 function TagList({ items }: { items: string[] }) {
   return (
@@ -40,6 +41,7 @@ function BulletList({ items }: { items: string[] }) {
 /** The full editorial "Feature Story" for one account. */
 export function AccountFeature({ account }: { account: Account }) {
   const { company, enrichment, fit } = account;
+  const isReal = company.data_source === "sec_edgar";
 
   return (
     <article>
@@ -67,10 +69,8 @@ export function AccountFeature({ account }: { account: Account }) {
         <div className="lg:col-span-8">
           {/* Image placeholder — grayscale halftone with Fig caption */}
           <figure className="border border-ink">
-            <div className="halftone flex h-56 items-center justify-center bg-neutral-200 grayscale">
-              <span className="font-serif text-2xl font-bold text-neutral-500">
-                {company.name}
-              </span>
+            <div className="halftone flex h-56 items-center justify-center bg-neutral-200">
+              <CompanyLogo domain={account.domain} name={company.name} size={120} />
             </div>
             <figcaption className="border-t border-ink px-3 py-1.5 font-mono text-[10px] uppercase tracking-widest text-neutral-500">
               Fig. 1.1 — {company.name}, {company.hq_location}
@@ -141,6 +141,7 @@ export function AccountFeature({ account }: { account: Account }) {
                 ["HQ", company.hq_location],
                 ["Country", company.country],
                 ["Founded", company.founded_year ? String(company.founded_year) : "—"],
+                ["Data Source", isReal ? "SEC EDGAR" : "Synthetic"],
               ].map(([label, value]) => (
                 <div key={label} className="flex justify-between gap-4 px-4 py-2.5">
                   <dt className="font-mono text-[11px] uppercase tracking-wider text-neutral-500">
@@ -150,6 +151,12 @@ export function AccountFeature({ account }: { account: Account }) {
                 </div>
               ))}
             </dl>
+            {/* Provenance caption so each section's origin is auditable. */}
+            <p className="border-t border-divider px-4 py-2 font-mono text-[10px] uppercase leading-relaxed tracking-widest text-neutral-400">
+              {isReal
+                ? "Source: SEC EDGAR filings · headcount approximate where unfiled"
+                : "Source: synthetic generator"}
+            </p>
           </div>
 
           <div className="mt-6">
@@ -158,7 +165,12 @@ export function AccountFeature({ account }: { account: Account }) {
 
           {company.recent_news.length > 0 && (
             <div className="mt-6 border border-divider p-4">
-              <SectionLabel>From the Wire</SectionLabel>
+              <SectionLabel>{isReal ? "Hiring Signals" : "From the Wire"}</SectionLabel>
+              {isReal && (
+                <p className="mt-1 font-mono text-[10px] uppercase tracking-widest text-accent">
+                  Live · Greenhouse / Lever job boards
+                </p>
+              )}
               <ul className="mt-3 space-y-2">
                 {company.recent_news.map((n, i) => (
                   <li key={i} className="font-body text-sm italic leading-relaxed text-neutral-600">

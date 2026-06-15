@@ -1,6 +1,6 @@
 "use client";
 
-import type { EnrichmentSource, SortOrder, Tier } from "@/lib/types";
+import type { DataSource, EnrichmentSource, SortOrder, Tier } from "@/lib/types";
 import { COUNTRIES } from "@/lib/constants";
 import { Button } from "@/components/ui/Button";
 
@@ -10,6 +10,7 @@ export interface FilterValues {
   country: string;
   minScore: string;
   source: EnrichmentSource | "";
+  dataSource: DataSource | "";
   sort: SortOrder;
 }
 
@@ -108,12 +109,25 @@ export function AccountFilters({
         </select>
       </Field>
 
+      <Field label="Data Source">
+        <select
+          className={selectClass}
+          value={values.dataSource}
+          onChange={(e) => onChange({ dataSource: e.target.value as DataSource | "" })}
+        >
+          <option value="">All Data</option>
+          <option value="sec_edgar">Real (SEC)</option>
+          <option value="synthetic">Synthetic</option>
+        </select>
+      </Field>
+
       <Field label="Sort">
         <select
           className={selectClass}
           value={values.sort}
           onChange={(e) => onChange({ sort: e.target.value as SortOrder })}
         >
+          <option value="real_first">Real Data First</option>
           <option value="ai_first">AI-Enriched First</option>
           <option value="score_desc">Score: High → Low</option>
           <option value="score_asc">Score: Low → High</option>

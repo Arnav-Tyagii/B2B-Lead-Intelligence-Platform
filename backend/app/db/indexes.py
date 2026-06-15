@@ -26,7 +26,12 @@ async def ensure_indexes(db: AsyncIOMotorDatabase) -> None:
     await accounts.create_index("company.industry")
     await accounts.create_index("company.country")
     await accounts.create_index("enrichment.source")
+    # Data provenance — filter to "real" (SEC) vs synthetic accounts.
+    await accounts.create_index("company.data_source")
     # Sort/range field — descending is the common "best accounts first" sort.
     await accounts.create_index([("fit.total", -1)])
+    # Compound index backing the REAL_FIRST sort: real accounts ahead, then by
+    # score. Descending on the bool puts True > False > missing without a scan.
+    await accounts.create_index([("company.is_real_data", -1), ("fit.total", -1)])
 
     logger.info("Ensured indexes on '%s'", ACCOUNTS_COLLECTION)

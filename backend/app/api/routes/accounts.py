@@ -27,6 +27,7 @@ async def list_accounts(
     country: str | None = Query(None),
     min_score: float | None = Query(None, ge=0, le=100),
     source: EnrichmentSource | None = Query(None),
+    data_source: str | None = Query(None, description="Provenance: 'sec_edgar' or 'synthetic'."),
     sort: SortOrder = Query(SortOrder.SCORE_DESC),
 ) -> PaginatedAccounts:
     query = AccountsQuery(
@@ -37,6 +38,7 @@ async def list_accounts(
         country=country,
         min_score=min_score,
         source=source,
+        data_source=data_source,
         sort=sort,
     )
     return await accounts_service.list_accounts(query)

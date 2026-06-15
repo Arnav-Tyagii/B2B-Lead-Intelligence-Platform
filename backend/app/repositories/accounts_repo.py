@@ -33,6 +33,8 @@ def _build_filter(q: AccountsQuery) -> dict:
         f["fit.total"] = {"$gte": q.min_score}
     if q.source is not None:
         f["enrichment.source"] = q.source.value
+    if q.data_source:
+        f["company.data_source"] = q.data_source
     return f
 
 
@@ -51,6 +53,10 @@ async def find_paginated(q: AccountsQuery) -> tuple[list[Account], int]:
     # AI-enriched accounts ahead, then ranks each group by score.
     if q.sort == SortOrder.AI_FIRST:
         sort_spec = [("enrichment.source", -1), ("fit.total", -1)]
+    elif q.sort == SortOrder.REAL_FIRST:
+        # is_real_data is a persisted bool: descending puts True (real) ahead of
+        # False (synthetic) and missing (legacy docs) last — a null-safe ordering.
+        sort_spec = [("company.is_real_data", -1), ("fit.total", -1)]
     elif q.sort == SortOrder.SCORE_ASC:
         sort_spec = [("fit.total", 1)]
     else:  # SCORE_DESC
@@ -69,6 +75,19 @@ async def find_paginated(q: AccountsQuery) -> tuple[list[Account], int]:
 async def get_by_domain(domain: str) -> Account | None:
     doc = await _collection().find_one({"_id": domain})
     return Account(**doc) if doc else None
+
+
+async def delete_all() -> int:
+    """Empty the collection. Destructive — only called from the seed's --reset."""
+    result = await _collection().delete_many({})
+    return result.deleted_count
+
+
+async def delete_synthetic() -> int:
+    """Delete non-real accounts: synthetic plus any legacy docs predating the
+    is_real_data field (matched via $ne True, which also catches missing)."""
+    result = await _collection().delete_many({"company.is_real_data": {"$ne": True}})
+    return result.deleted_count
 
 
 async def upsert_account(account: Account) -> None:

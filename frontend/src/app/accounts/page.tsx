@@ -19,8 +19,9 @@ const DEFAULT_FILTERS: FilterValues = {
   country: "",
   minScore: "",
   source: "",
-  // Default to AI-first so genuinely Gemini-enriched accounts lead the book.
-  sort: "ai_first",
+  dataSource: "",
+  // Default to real-first so genuinely acquired (SEC) accounts lead the book.
+  sort: "real_first",
 };
 
 export default function AccountsPage() {
@@ -40,6 +41,7 @@ export default function AccountsPage() {
     country: filters.country || undefined,
     min_score: Number.isFinite(minScoreNum) ? minScoreNum : undefined,
     source: filters.source || undefined,
+    data_source: filters.dataSource || undefined,
     sort: filters.sort,
   };
 
@@ -52,6 +54,7 @@ export default function AccountsPage() {
       filters.country,
       debouncedMinScore,
       filters.source,
+      filters.dataSource,
       filters.sort,
     ],
   );

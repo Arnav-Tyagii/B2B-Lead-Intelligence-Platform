@@ -20,6 +20,9 @@ class SortOrder(str, Enum):
     # AI-enriched accounts first, then by score — surfaces genuinely
     # Gemini-enriched records at the top of the book.
     AI_FIRST = "ai_first"
+    # Real (e.g. SEC-sourced) firmographics first, then by score — surfaces
+    # genuinely acquired accounts above the synthetic book.
+    REAL_FIRST = "real_first"
 
 
 class AccountsQuery(BaseModel):
@@ -33,6 +36,8 @@ class AccountsQuery(BaseModel):
     country: str | None = None
     min_score: float | None = Field(default=None, ge=0, le=100)
     source: EnrichmentSource | None = None
+    # Provenance filter, e.g. "sec_edgar" (real) or "synthetic".
+    data_source: str | None = None
     sort: SortOrder = SortOrder.SCORE_DESC
 
 

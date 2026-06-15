@@ -11,10 +11,16 @@ Free-tier discipline (critical):
   - This keeps the run fast, well under daily quota, and never blocks the book
     from being fully scored and persisted.
 
+Data sources (acquirers) — same enrich→score→upsert flow either way:
+  --source synthetic   the generated book (default; no network needed)
+  --source sec         real firmographics from the SEC EDGAR API (public companies)
+  --with-intent        overlay live hiring signals from Greenhouse/Lever (SEC source)
+
 Usage:
-  python -m app.scripts.seed                      # 500 accounts, ~25 via Gemini
+  python -m app.scripts.seed                      # 500 synthetic, ~25 via Gemini
   python -m app.scripts.seed --count 600 --gemini-limit 0   # all fallback (no API)
-  python -m app.scripts.seed --gemini-limit 40 --delay 4.5
+  python -m app.scripts.seed --source sec --with-intent --gemini-limit 0
+                                                  # ~110 REAL companies + intent, no Gemini
 """
 
 import argparse
@@ -27,7 +33,8 @@ from app.models.account import Account
 from app.models.enrichment import EnrichmentSource
 from app.models.icp import ICP
 from app.repositories import accounts_repo
-from app.scripts.generate_data import generate_companies
+from app.scripts.acquirers import SOURCE_CHOICES, get_acquirer
+from app.scripts.acquirers import job_signals, news_signals, wikidata
 from app.services import gemini_client
 from app.services.enrichment import enrich_company
 from app.services.fallback_enricher import fallback_enrich
@@ -38,7 +45,32 @@ logger = get_logger("seed")
 
 def _parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Seed the accounts collection.")
-    p.add_argument("--count", type=int, default=500, help="How many companies to generate.")
+    p.add_argument("--count", type=int, default=500, help="How many companies to acquire.")
+    p.add_argument(
+        "--source", choices=SOURCE_CHOICES, default="synthetic",
+        help="Acquisition source: 'synthetic' (generated) or 'sec' (real, SEC EDGAR).",
+    )
+    p.add_argument(
+        "--with-intent", action="store_true",
+        help="Overlay live hiring signals from public Greenhouse/Lever boards.",
+    )
+    p.add_argument(
+        "--with-news", action="store_true",
+        help="Overlay real recent headlines (Google News) + Hacker News buzz.",
+    )
+    p.add_argument(
+        "--with-wiki", action="store_true",
+        help="Augment founding year + description from Wikidata.",
+    )
+    p.add_argument(
+        "--with-all", action="store_true",
+        help="Shortcut: enable intent + news + wiki overlays.",
+    )
+    p.add_argument(
+        "--reset", choices=["none", "synthetic", "all"], default="none",
+        help="DESTRUCTIVE: delete docs before seeding. 'synthetic' removes the "
+             "generated/legacy book (keeps real); 'all' empties the collection.",
+    )
     p.add_argument(
         "--gemini-limit", type=int, default=25,
         help="Max accounts to live-enrich via Gemini; the rest use the fallback.",
@@ -50,14 +82,42 @@ def _parse_args() -> argparse.Namespace:
     return p.parse_args()
 
 
-async def run(count: int, gemini_limit: int, delay: float) -> None:
+async def run(
+    count: int, source: str, with_intent: bool, with_news: bool, with_wiki: bool,
+    reset: str, gemini_limit: int, delay: float,
+) -> None:
     settings_icp = ICP()  # default ICP (Phase 4 will allow editing it in Mongo)
 
     # Ensure indexes exist before bulk writes so the collection is query-ready.
     await ensure_indexes(get_db())
 
-    companies = generate_companies(count)
-    logger.info("Generated %d companies. Enriching + scoring…", len(companies))
+    # Optional destructive reset BEFORE seeding (opt-in via --reset).
+    if reset == "all":
+        deleted = await accounts_repo.delete_all()
+        logger.warning("Reset: deleted ALL %d existing documents.", deleted)
+    elif reset == "synthetic":
+        deleted = await accounts_repo.delete_synthetic()
+        logger.warning("Reset: deleted %d synthetic/legacy documents.", deleted)
+
+    # Acquire firmographics from the chosen source (same Acquirer interface).
+    # SEC/intent are blocking HTTP; run off the event loop so we don't stall it.
+    acquirer = get_acquirer(source)
+    companies = await asyncio.to_thread(acquirer.acquire, count)
+    logger.info("Acquired %d companies via '%s'.", len(companies), acquirer.name)
+
+    # Optional overlays — each augments the acquired companies in place. All are
+    # blocking HTTP, so run them off the event loop.
+    if with_intent:
+        await asyncio.to_thread(job_signals.apply_intent, companies)
+    if with_news:
+        await asyncio.to_thread(news_signals.apply_news, companies)
+    if with_wiki:
+        await asyncio.to_thread(wikidata.apply_wikidata, companies)
+
+    if not companies:
+        logger.warning("No companies acquired; nothing to seed.")
+        return
+    logger.info("Enriching + scoring %d companies…", len(companies))
 
     # Budget the LIVE work by attempts (not successes): a single transient parse
     # miss still consumes one attempt but doesn't abort the run. We only stop
@@ -101,7 +161,13 @@ async def _main() -> None:
     configure_logging()
     args = _parse_args()
     try:
-        await run(args.count, args.gemini_limit, args.delay)
+        await run(
+            args.count, args.source,
+            args.with_intent or args.with_all,
+            args.with_news or args.with_all,
+            args.with_wiki or args.with_all,
+            args.reset, args.gemini_limit, args.delay,
+        )
     finally:
         await close_client()
 

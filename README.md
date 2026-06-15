@@ -103,6 +103,49 @@ python -m app.scripts.seed --gemini-limit 0
 > seed records intentionally use the deterministic fallback. This is by design —
 > the dashboard is fully populated and scored without depending on live quota.
 
+#### Real data acquisition (SEC EDGAR + Greenhouse/Lever)
+
+The seed pipeline is **source-agnostic**: acquisition sits behind one `Acquirer`
+interface (`app/scripts/acquirers/`), so the same enrich → score → upsert flow
+runs over either synthetic or real firmographics. Pick a source with `--source`:
+
+```bash
+# Real firmographics from SEC EDGAR + all free overlays, no Gemini. (--with-all =
+# hiring intent + news/buzz + Wikidata). --reset all gives a pure real-data book.
+python -m app.scripts.seed --source sec --with-all --reset all --gemini-limit 0
+
+# Pick overlays individually instead of --with-all:
+python -m app.scripts.seed --source sec --with-intent --with-news --with-wiki
+
+# Also AI-enrich a handful within the daily Gemini quota:
+python -m app.scripts.seed --source sec --with-all --gemini-limit 20
+```
+
+**Free data sources layered into the pipeline (all key-less APIs):**
+
+| Source | Adds | Flag |
+| --- | --- | --- |
+| SEC EDGAR | revenue, industry (SIC), HQ/country, employees | `--source sec` |
+| Greenhouse / Lever | live open-role count → hiring intent | `--with-intent` |
+| Google News + Hacker News | real recent headlines + buzz volume → intent | `--with-news` |
+| Wikidata | founding year + crisp company description | `--with-wiki` |
+| Clearbit Logo API | real company logos in the UI (frontend, automatic) | — |
+
+- **SEC EDGAR** (`data.sec.gov`) is a public JSON API — *API ingestion, not
+  scraping*. No daily quota; it only asks for ≤10 req/s and a `User-Agent` with a
+  contact (override via the `SEC_USER_AGENT` env var). It supplies revenue,
+  industry (SIC), and HQ/country; ~110 well-known companies are curated in
+  `seed_universe.py`. Acquiring 100–200 companies takes well under a minute.
+- **Greenhouse/Lever** public board endpoints add open-roles as hiring-intent
+  headlines (mined by the existing fallback enricher). Coverage is partial by
+  design — only companies with a known public board are augmented.
+- Real accounts are stamped `data_source="sec_edgar"`, surfaced with a **SEC**
+  badge, a **Data Source** filter, and the default **Real Data First** sort.
+- Only the **Gemini AI layer** is daily-rate-limited; acquisition + scoring of all
+  companies is unlimited and re-runnable any day (`upsert` accumulates).
+- The synthetic generator remains the default (`--source synthetic`), so the
+  existing offline path is unchanged.
+
 Run the API:
 
 ```bash
