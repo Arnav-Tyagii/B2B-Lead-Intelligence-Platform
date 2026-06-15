@@ -1,0 +1,26 @@
+# Render Blueprint for the FastAPI backend (free web service).
+# Import this repo in Render → it reads this file. Secrets marked `sync: false`
+# must be filled in the Render dashboard (never commit them).
+services:
+  - type: web
+    name: lead-intelligence-api
+    runtime: python
+    rootDir: backend
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    # Bind to the port Render injects via $PORT.
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.9"
+      - key: MONGODB_URI
+        sync: false # paste your Atlas SRV string in the dashboard
+      - key: MONGODB_DB_NAME
+        value: lead_intelligence
+      - key: GEMINI_API_KEY
+        sync: false # optional; blank => deterministic fallback enricher
+      - key: GEMINI_MODEL
+        value: gemini-2.5-flash-lite
+      - key: CORS_ORIGINS
+        sync: false # your Vercel URL, e.g. https://your-app.vercel.app

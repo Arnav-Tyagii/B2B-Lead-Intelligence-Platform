@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -m venv .venv)",
+      "Bash(.venv/Scripts/python.exe -m pip install --upgrade pip -q)",
+      "Bash(.venv/Scripts/python.exe -m pip install -r requirements.txt -q)",
+      "Bash(.venv/Scripts/python.exe *)",
+      "Bash(npm install *)",
+      "Bash(node -e \"console.log\\('next version:', require\\('next/package.json'\\).version\\)\")",
+      "Bash(npm run *)",
+      "Bash(npm start *)"
+    ]
+  }
+}
